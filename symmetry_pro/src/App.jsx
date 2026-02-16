@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Fingerprint, Zap, FileText, X, Download, RefreshCw } from 'lucide-react';
+import { Upload, Fingerprint, Zap, FileText, X, Download } from 'lucide-react';
 
 // ==========================================
-// SYMMETRY ARCHITECT // V7: STROBE EDITION
+// SYMMETRY ARCHITECT // V7.5: PARALLAX FIX
 // ==========================================
 
 const App = () => {
@@ -11,7 +11,7 @@ const App = () => {
   const [img2, setImg2] = useState(null);
   const [opacity, setOpacity] = useState(50);
   const [diffMode, setDiffMode] = useState(false);
-  const [strobeMode, setStrobeMode] = useState(false); // New "Clever" Alignment Tool
+  const [strobeMode, setStrobeMode] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0, s: 100, r: 0 });
   const [generatedReport, setGeneratedReport] = useState(null);
   
@@ -20,15 +20,14 @@ const App = () => {
   const dragStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef(null);
 
-  // STROBE LOGIC (The "Flicker")
-  // If active, it toggles opacity between 0 and 100 rapidly
+  // STROBE LOGIC (Slower Speed: 500ms)
   const [strobeVisible, setStrobeVisible] = useState(true);
   useEffect(() => {
     let interval;
     if (strobeMode) {
       interval = setInterval(() => {
         setStrobeVisible(prev => !prev);
-      }, 150); // 150ms flicker speed
+      }, 500); // 500ms = 0.5 Seconds (Slower Rhythm)
     } else {
       setStrobeVisible(true);
     }
@@ -46,6 +45,7 @@ const App = () => {
 
   const handleMouseMove = (e) => {
     if (!isDragging) return;
+    // e.preventDefault(); // Optional depending on touch behavior preferences
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     setPos(prev => ({ 
@@ -95,7 +95,7 @@ const App = () => {
     document.body.removeChild(link);
   };
 
-  // REPORT GENERATION (Kept strictly professional)
+  // --- REPORT GENERATION ENGINE (CORRECTED MATH) ---
   const getContainRect = (imgW, imgH, boxW, boxH) => {
     const ratio = Math.min(boxW / imgW, boxH / imgH);
     const w = imgW * ratio;
@@ -127,10 +127,19 @@ const App = () => {
 
   const generateReport = async () => {
     if (!img1 || !img2) return;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    
+    // 1. CALCULATE SCALE FACTOR (THE BUG FIX)
+    // We compare the Report Panel Width (600) to your Screen's Container Width.
+    // This tells us how much to multiply your X/Y movements by.
     const panelW = 600;
     const panelH = 800;
+    
+    // Get actual size of the viewer on your screen
+    const domRect = containerRef.current.getBoundingClientRect();
+    const scaleMultiplier = panelW / domRect.width; 
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
     const pad = 40;
     const headerH = 200; 
     const footerH = 300; 
@@ -151,22 +160,26 @@ const App = () => {
     const imageA = await loadImage(img1);
     const imageB = await loadImage(img2);
 
-    // Analysis
+    // Hidden Analysis
     const tempC = document.createElement('canvas');
     tempC.width = panelW;
     tempC.height = panelH;
     const tCtx = tempC.getContext('2d');
     const baseRect = getContainRect(imageA.width, imageA.height, panelW, panelH);
     tCtx.drawImage(imageA, baseRect.x, baseRect.y, baseRect.w, baseRect.h);
+    
     tCtx.globalCompositeOperation = 'difference';
     tCtx.save();
     tCtx.translate(panelW/2, panelH/2);
-    tCtx.translate(pos.x * 1.5, pos.y * 1.5); 
+    // APPLY SCALAR TO POS
+    tCtx.translate(pos.x * scaleMultiplier, pos.y * scaleMultiplier); 
     tCtx.scale(pos.s / 100, pos.s / 100);
     tCtx.rotate(pos.r * Math.PI / 180);
+    
     const ovRect = getContainRect(imageB.width, imageB.height, panelW, panelH);
     tCtx.drawImage(imageB, ovRect.x - panelW/2, ovRect.y - panelH/2, ovRect.w, ovRect.h);
     tCtx.restore();
+    
     const matchScore = calculateScore(tCtx, panelW, panelH);
 
     // Draw Layout
@@ -199,9 +212,11 @@ const App = () => {
       if (mode !== 'base') {
         ctx.save();
         ctx.translate(x + panelW/2, y + panelH/2);
-        ctx.translate(pos.x * 1.5, pos.y * 1.5);
+        // APPLY SCALAR TO POS
+        ctx.translate(pos.x * scaleMultiplier, pos.y * scaleMultiplier); 
         ctx.scale(pos.s / 100, pos.s / 100);
         ctx.rotate(pos.r * Math.PI / 180);
+        
         if (mode === 'diff') {
           ctx.globalCompositeOperation = 'difference';
           ctx.filter = 'contrast(1.5) brightness(1.2)';
@@ -254,8 +269,8 @@ const App = () => {
         {/* NAV */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-4">
           <div onClick={resetSystem} className="cursor-pointer group">
-            <h1 className="text-2xl font-bold text-neon-green tracking-tighter group-hover:text-white transition">SYMMETRY_V7</h1>
-            <p className="text-[10px] text-gray-500 group-hover:text-red-500">STROBE EDITION // CLICK TO RESET</p>
+            <h1 className="text-2xl font-bold text-neon-green tracking-tighter group-hover:text-white transition">SYMMETRY_V7.5</h1>
+            <p className="text-[10px] text-gray-500 group-hover:text-red-500">PARALLAX CORRECTED // CLICK TO RESET</p>
           </div>
           <button 
             onClick={generateReport}
@@ -281,7 +296,7 @@ const App = () => {
           </div>
         )}
 
-        {/* TOP DECK: OPACITY SLIDER (RELOCATED) */}
+        {/* TOP DECK: OPACITY SLIDER */}
         <div className={`w-full bg-panel-bg p-3 rounded border border-gray-800 transition-opacity ${diffMode || strobeMode ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
             <div className="flex justify-between text-xs text-gray-400 mb-1">
                 <span>OPACITY FADER</span>
@@ -313,7 +328,6 @@ const App = () => {
               src={img2} 
               className="absolute inset-0 w-full h-full object-contain pointer-events-none"
               style={{ 
-                // STROBE MODE LOGIC: If Strobe is ON, toggle between 1 and 0. If OFF, use Opacity or Diff Mode.
                 opacity: strobeMode 
                          ? (strobeVisible ? 1 : 0) 
                          : (diffMode ? 1 : opacity / 100),
@@ -324,7 +338,6 @@ const App = () => {
             />
           )}
 
-          {/* OVERLAYS */}
           <div className="absolute inset-0 pointer-events-none opacity-10 z-10 bg-[linear-gradient(to_bottom,rgba(255,255,255,0),rgba(255,255,255,0)_50%,rgba(0,0,0,0.2)_50%,rgba(0,0,0,0.2))] bg-[length:100%_4px]"></div>
           
           {diffMode && (
@@ -342,7 +355,6 @@ const App = () => {
 
         {/* BOTTOM CONTROLS */}
         <div className="bg-panel-bg p-4 rounded border border-gray-800 space-y-4">
-          
           <div className="flex gap-4 border-b border-gray-800 pb-4">
              <div className="flex flex-col items-center gap-1">
                 <button className="w-10 h-10 bg-gray-900 border border-gray-700 text-neon-green rounded flex items-center justify-center active:bg-neon-green active:text-black" onClick={() => setPos(p => ({...p, y: p.y-1}))}>▲</button>
