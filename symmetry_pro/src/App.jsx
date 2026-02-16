@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Fingerprint, Grid, FileText, RefreshCw, X } from 'lucide-react';
+import { Upload, Fingerprint, Zap, FileText, X, Download, RefreshCw } from 'lucide-react';
 
 // ==========================================
-// SYMMETRY ARCHITECT // V6: BLACK BOX (REACT EDITION)
+// SYMMETRY ARCHITECT // V7: STROBE EDITION
 // ==========================================
 
 const App = () => {
@@ -11,7 +11,7 @@ const App = () => {
   const [img2, setImg2] = useState(null);
   const [opacity, setOpacity] = useState(50);
   const [diffMode, setDiffMode] = useState(false);
-  const [showGrid, setShowGrid] = useState(false);
+  const [strobeMode, setStrobeMode] = useState(false); // New "Clever" Alignment Tool
   const [pos, setPos] = useState({ x: 0, y: 0, s: 100, r: 0 });
   const [generatedReport, setGeneratedReport] = useState(null);
   
@@ -20,7 +20,22 @@ const App = () => {
   const dragStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef(null);
 
-  // --- DRAG LOGIC ---
+  // STROBE LOGIC (The "Flicker")
+  // If active, it toggles opacity between 0 and 100 rapidly
+  const [strobeVisible, setStrobeVisible] = useState(true);
+  useEffect(() => {
+    let interval;
+    if (strobeMode) {
+      interval = setInterval(() => {
+        setStrobeVisible(prev => !prev);
+      }, 150); // 150ms flicker speed
+    } else {
+      setStrobeVisible(true);
+    }
+    return () => clearInterval(interval);
+  }, [strobeMode]);
+
+  // DRAG LOGIC
   const handleMouseDown = (e) => {
     if (!img2) return;
     setIsDragging(true);
@@ -31,7 +46,6 @@ const App = () => {
 
   const handleMouseMove = (e) => {
     if (!isDragging) return;
-    // e.preventDefault(); // React handles this slightly differently, usually safe to omit in strict mode
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     setPos(prev => ({ 
@@ -52,7 +66,7 @@ const App = () => {
     };
   }, []);
 
-  // --- HANDLERS ---
+  // HANDLERS
   const handleUpload = (e, setter) => {
     const file = e.target.files[0];
     if (file) {
@@ -61,16 +75,27 @@ const App = () => {
   };
 
   const resetSystem = () => {
-    if(window.confirm("CONFIRM SYSTEM RESET? ALL DATA WILL BE WIPED.")) {
+    if(window.confirm("CONFIRM SYSTEM RESET?")) {
       setImg1(null);
       setImg2(null);
       setPos({ x: 0, y: 0, s: 100, r: 0 });
       setDiffMode(false);
+      setStrobeMode(false);
       setGeneratedReport(null);
     }
   };
 
-  // --- CANVAS LOGIC ---
+  const downloadReport = () => {
+    if (!generatedReport) return;
+    const link = document.createElement('a');
+    link.href = generatedReport;
+    link.download = `TREVINO_EVIDENCE_${Date.now()}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // REPORT GENERATION (Kept strictly professional)
   const getContainRect = (imgW, imgH, boxW, boxH) => {
     const ratio = Math.min(boxW / imgW, boxH / imgH);
     const w = imgW * ratio;
@@ -85,18 +110,15 @@ const App = () => {
     const cropH = height * 0.5;
     const cropX = (width - cropW) / 2;
     const cropY = (height - cropH) / 2;
-    
     const frame = ctx.getImageData(cropX, cropY, cropW, cropH);
     const data = frame.data;
     let totalDiff = 0;
     let pixelCount = 0;
-
     for (let i = 0; i < data.length; i += 4) {
       const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
       totalDiff += brightness;
       pixelCount++;
     }
-    
     const avgDiff = totalDiff / pixelCount;
     let score = 100 - (avgDiff / 255 * 100);
     if (score > 90) score = 98; 
@@ -105,10 +127,8 @@ const App = () => {
 
   const generateReport = async () => {
     if (!img1 || !img2) return;
-
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    
     const panelW = 600;
     const panelH = 800;
     const pad = 40;
@@ -131,15 +151,13 @@ const App = () => {
     const imageA = await loadImage(img1);
     const imageB = await loadImage(img2);
 
-    // 1. HIDDEN ANALYSIS
+    // Analysis
     const tempC = document.createElement('canvas');
     tempC.width = panelW;
     tempC.height = panelH;
     const tCtx = tempC.getContext('2d');
-    
     const baseRect = getContainRect(imageA.width, imageA.height, panelW, panelH);
     tCtx.drawImage(imageA, baseRect.x, baseRect.y, baseRect.w, baseRect.h);
-    
     tCtx.globalCompositeOperation = 'difference';
     tCtx.save();
     tCtx.translate(panelW/2, panelH/2);
@@ -149,15 +167,12 @@ const App = () => {
     const ovRect = getContainRect(imageB.width, imageB.height, panelW, panelH);
     tCtx.drawImage(imageB, ovRect.x - panelW/2, ovRect.y - panelH/2, ovRect.w, ovRect.h);
     tCtx.restore();
-
     const matchScore = calculateScore(tCtx, panelW, panelH);
 
-    // 2. HEADER
+    // Draw Layout
     ctx.fillStyle = "#00ff41";
     ctx.font = "bold 50px Courier New";
     ctx.fillText("SYMMETRY // FORENSIC REPORT", pad, 70);
-    
-    // Score
     ctx.strokeStyle = "#00ff41";
     ctx.lineWidth = 4;
     ctx.strokeRect(canvas.width - 350, 40, 300, 120);
@@ -166,13 +181,11 @@ const App = () => {
     ctx.fillText(`${matchScore}%`, canvas.width - 320, 125);
     ctx.font = "20px Courier New";
     ctx.fillText("STRUCTURAL INTEGRITY", canvas.width - 320, 150);
-
     ctx.fillStyle = "#888";
     ctx.font = "24px Courier New";
     ctx.fillText(`DATE: ${new Date().toLocaleDateString()}`, pad, 120);
     ctx.fillText(`ZOOM: ${pos.s}%  TILT: ${pos.r}°`, pad, 155);
 
-    // 3. DRAW PANELS
     const drawPanel = (label, x, y, mode) => {
       ctx.save();
       ctx.beginPath();
@@ -180,31 +193,26 @@ const App = () => {
       ctx.clip();
       ctx.fillStyle = "#111";
       ctx.fillRect(x,y,panelW,panelH);
-
       if (mode !== 'overlay_only') {
         ctx.drawImage(imageA, x + baseRect.x, y + baseRect.y, baseRect.w, baseRect.h);
       }
-
       if (mode !== 'base') {
         ctx.save();
         ctx.translate(x + panelW/2, y + panelH/2);
         ctx.translate(pos.x * 1.5, pos.y * 1.5);
         ctx.scale(pos.s / 100, pos.s / 100);
         ctx.rotate(pos.r * Math.PI / 180);
-        
         if (mode === 'diff') {
           ctx.globalCompositeOperation = 'difference';
           ctx.filter = 'contrast(1.5) brightness(1.2)';
         } else if (mode === 'blend') {
           ctx.globalAlpha = 0.5;
         }
-
         const oRect = getContainRect(imageB.width, imageB.height, panelW, panelH);
         ctx.drawImage(imageB, oRect.x - panelW/2, oRect.y - panelH/2, oRect.w, oRect.h);
         ctx.restore();
       }
       ctx.restore();
-      
       ctx.strokeStyle = mode === 'diff' ? "#00ff41" : "#444";
       ctx.strokeRect(x,y,panelW,panelH);
       ctx.fillStyle = mode === 'diff' ? "#00ff41" : "#fff";
@@ -217,23 +225,19 @@ const App = () => {
     drawPanel("[C] OPACITY STACK", pad, headerH + panelH + pad, 'blend');
     drawPanel("[D] DIFFERENCE MAP", pad + panelW + pad, headerH + panelH + pad, 'diff');
 
-    // 4. FOOTER
     const fy = headerH + (panelH * 2) + (pad * 2) + 60;
     ctx.fillStyle = "#222";
     ctx.fillRect(pad, fy, canvas.width - (pad*2), 220);
     ctx.strokeStyle = "#444";
     ctx.strokeRect(pad, fy, canvas.width - (pad*2), 220);
-
     ctx.fillStyle = "#00ff41";
     ctx.font = "bold 30px Courier New";
     ctx.fillText("FORENSIC ANALYSIS LEGEND:", pad + 30, fy + 50);
-
     ctx.fillStyle = "#ddd";
     ctx.font = "22px Courier New";
     const lineH = 35;
     let tx = pad + 30;
     let ty = fy + 90;
-    
     ctx.fillText("1. THE VOID (BLACK): Perfect structural alignment. Mathematical match.", tx, ty);
     ctx.fillText("2. THE GHOST (GREY): Bone structure matches, but lighting/skin tone differs.", tx, ty + lineH);
     ctx.fillText("3. THE NEON (COLOR): Structural deviation. This area indicates a mismatch.", tx, ty + (lineH*2));
@@ -243,17 +247,15 @@ const App = () => {
     setGeneratedReport(canvas.toDataURL('image/jpeg', 0.9));
   };
 
-  // --- RENDER ---
   return (
     <div className="min-h-screen bg-dark-bg text-white p-4 pb-20 font-mono flex flex-col items-center">
-      
       <div className="w-full max-w-2xl flex flex-col gap-4">
         
         {/* NAV */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-4">
           <div onClick={resetSystem} className="cursor-pointer group">
-            <h1 className="text-2xl font-bold text-neon-green tracking-tighter group-hover:text-white transition">SYMMETRY_V6</h1>
-            <p className="text-[10px] text-gray-500 group-hover:text-red-500">REACT EDITION // CLICK TO RESET</p>
+            <h1 className="text-2xl font-bold text-neon-green tracking-tighter group-hover:text-white transition">SYMMETRY_V7</h1>
+            <p className="text-[10px] text-gray-500 group-hover:text-red-500">STROBE EDITION // CLICK TO RESET</p>
           </div>
           <button 
             onClick={generateReport}
@@ -279,6 +281,15 @@ const App = () => {
           </div>
         )}
 
+        {/* TOP DECK: OPACITY SLIDER (RELOCATED) */}
+        <div className={`w-full bg-panel-bg p-3 rounded border border-gray-800 transition-opacity ${diffMode || strobeMode ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+            <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>OPACITY FADER</span>
+                <span>{opacity}%</span>
+            </div>
+            <input type="range" className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" min="0" max="100" value={opacity} onChange={(e) => setOpacity(e.target.value)} />
+        </div>
+
         {/* VIEWPORT */}
         <div 
            ref={containerRef}
@@ -302,7 +313,10 @@ const App = () => {
               src={img2} 
               className="absolute inset-0 w-full h-full object-contain pointer-events-none"
               style={{ 
-                opacity: diffMode ? 1 : opacity / 100,
+                // STROBE MODE LOGIC: If Strobe is ON, toggle between 1 and 0. If OFF, use Opacity or Diff Mode.
+                opacity: strobeMode 
+                         ? (strobeVisible ? 1 : 0) 
+                         : (diffMode ? 1 : opacity / 100),
                 mixBlendMode: diffMode ? 'difference' : 'normal',
                 filter: diffMode ? 'contrast(1.5) brightness(1.2)' : 'none',
                 transform: `translate(${pos.x}px, ${pos.y}px) scale(${pos.s / 100}) rotate(${pos.r}deg)`
@@ -313,28 +327,20 @@ const App = () => {
           {/* OVERLAYS */}
           <div className="absolute inset-0 pointer-events-none opacity-10 z-10 bg-[linear-gradient(to_bottom,rgba(255,255,255,0),rgba(255,255,255,0)_50%,rgba(0,0,0,0.2)_50%,rgba(0,0,0,0.2))] bg-[length:100%_4px]"></div>
           
-          {showGrid && (
-            <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center opacity-50">
-               <svg viewBox="0 0 100 120" className="w-full h-full stroke-cyan-400 fill-none stroke-[0.5]">
-                  <rect x="20" y="20" width="60" height="80" rx="30" />
-                  <line x1="20" y1="50" x2="80" y2="50" />
-                  <circle cx="35" cy="50" r="5" />
-                  <circle cx="65" cy="50" r="5" />
-                  <line x1="50" y1="20" x2="50" y2="100" />
-                  <rect x="42" y="50" width="16" height="25" />
-                  <line x1="35" y1="85" x2="65" y2="85" />
-              </svg>
-            </div>
-          )}
-
           {diffMode && (
             <div className="absolute top-4 right-4 bg-red-600 text-black text-[10px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-30 animate-pulse">
               REC: FORENSIC MODE
             </div>
           )}
+
+          {strobeMode && (
+            <div className="absolute top-4 left-4 bg-yellow-400 text-black text-[10px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-30">
+              ⚡ STROBE ACTIVE
+            </div>
+          )}
         </div>
 
-        {/* CONTROLS */}
+        {/* BOTTOM CONTROLS */}
         <div className="bg-panel-bg p-4 rounded border border-gray-800 space-y-4">
           
           <div className="flex gap-4 border-b border-gray-800 pb-4">
@@ -365,11 +371,11 @@ const App = () => {
 
           <div className="grid grid-cols-2 gap-3">
              <button 
-               onClick={() => setShowGrid(!showGrid)}
+               onClick={() => setStrobeMode(!strobeMode)}
                className={`py-3 rounded font-bold text-[10px] tracking-widest border flex items-center justify-center gap-2 transition
-               ${showGrid ? 'bg-cyan-900 text-cyan-200 border-cyan-500' : 'bg-black text-gray-500 border-gray-700'}`}
+               ${strobeMode ? 'bg-yellow-400 text-black border-yellow-500' : 'bg-black text-gray-500 border-gray-700'}`}
              >
-               <Grid size={16} /> {showGrid ? "GRID: ON" : "TOGGLE GRID"}
+               <Zap size={16} /> {strobeMode ? "STROBE: ON" : "STROBE CHECK"}
              </button>
 
              <button 
@@ -380,11 +386,6 @@ const App = () => {
                <Fingerprint size={16} /> {diffMode ? "FORENSIC: ON" : "TOGGLE FORENSIC"}
              </button>
           </div>
-
-          <div className={`transition-opacity ${diffMode ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-             <input type="range" className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" min="0" max="100" value={opacity} onChange={(e) => setOpacity(e.target.value)} />
-          </div>
-
         </div>
 
         {/* MODAL */}
@@ -394,9 +395,17 @@ const App = () => {
                <span className="text-neon-green font-bold text-xs">EVIDENCE LOCKER</span>
                <button onClick={() => setGeneratedReport(null)} className="text-red-500 text-xs font-bold flex items-center gap-1"><X size={14}/> CLOSE</button>
             </div>
-            <div className="border border-neon-green p-1 bg-black overflow-auto max-h-[85vh] w-full max-w-2xl shadow-[0_0_20px_rgba(0,255,65,0.2)]">
+            <div className="border border-neon-green p-1 bg-black overflow-auto max-h-[70vh] w-full max-w-2xl shadow-[0_0_20px_rgba(0,255,65,0.2)] mb-4">
                <img src={generatedReport} className="w-full h-auto" />
             </div>
+            
+            <button 
+                onClick={downloadReport}
+                className="w-full max-w-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded flex items-center justify-center gap-3 shadow-lg transition"
+            >
+                <Download size={20} />
+                DOWNLOAD EVIDENCE ARTIFACT
+            </button>
           </div>
         )}
 
